@@ -40,6 +40,7 @@ services:
     environment:
       DATABASE_URL: postgresql://zyntra:zyntra@events_db:5432/events
       TICKETMASTER_API_KEY: ${TICKETMASTER_API_KEY:-}
+      TICKETMASTER_COUNTRY: ${TICKETMASTER_COUNTRY:-ES}
     depends_on:
       events_db:
         condition: service_healthy
