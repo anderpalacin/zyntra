@@ -1,0 +1,92 @@
+name: zyntra
+
+services:
+  events_db:
+    image: postgres:16-alpine
+    container_name: zyntra_events_db
+    environment:
+      POSTGRES_DB: events
+      POSTGRES_USER: zyntra
+      POSTGRES_PASSWORD: zyntra
+    ports: ["5433:5432"]
+    volumes:
+      - events_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zyntra -d events"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  users_db:
+    image: postgres:16-alpine
+    container_name: zyntra_users_db
+    environment:
+      POSTGRES_DB: users
+      POSTGRES_USER: zyntra
+      POSTGRES_PASSWORD: zyntra
+    ports: ["5434:5432"]
+    volumes:
+      - users_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zyntra -d users"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  event_service:
+    build: ./event-service
+    image: zyntra_event_service
+    container_name: zyntra_event_service
+    environment:
+      DATABASE_URL: postgresql://zyntra:zyntra@events_db:5432/events
+      TICKETMASTER_API_KEY: ${TICKETMASTER_API_KEY:-}
+    depends_on:
+      events_db:
+        condition: service_healthy
+
+  user_service:
+    build: ./user-service
+    image: zyntra_user_service
+    container_name: zyntra_user_service
+    environment:
+      DATABASE_URL: postgresql://zyntra:zyntra@users_db:5432/users
+      EVENT_SERVICE_URL: http://event_service:8000
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en src/.env}
+    depends_on:
+      users_db:
+        condition: service_healthy
+      event_service:
+        condition: service_healthy
+
+  gateway:
+    build: ./gateway
+    image: zyntra_gateway
+    container_name: zyntra_gateway
+    environment:
+      EVENT_SERVICE_URL: http://event_service:8000
+      USER_SERVICE_URL: http://user_service:4000
+      CORS_ORIGINS: http://localhost:8080
+    depends_on:
+      event_service:
+        condition: service_healthy
+      user_service:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    image: zyntra_frontend
+    container_name: zyntra_frontend
+    ports: ["8080:80"]
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+volumes:
+  events_data:
+    name: zyntra_events_data
+  users_data:
+    name: zyntra_users_data
+
+networks:
+  default:
+    name: zyntra_network
